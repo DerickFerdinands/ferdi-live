@@ -5,8 +5,6 @@ import { useAuth } from "@/components/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -16,12 +14,32 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Play, Plus, Trash2, Eye, Copy, Server, Globe, Monitor, Cpu } from "lucide-react"
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore"
+import {
+  Play,
+  Plus,
+  Trash2,
+  Eye,
+  Copy,
+  Server,
+  Globe,
+  Settings,
+  Video,
+  Shield,
+  Calendar,
+  ExternalLink,
+} from "lucide-react"
+import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { VideoPlayer } from "@/components/video-player"
 import { TranscodingStatus } from "@/components/transcoding-status"
+import { ChannelCreationForm } from "@/components/channel-creation-form"
+import { ProgramSchedule } from "@/components/program-schedule"
+import Link from "next/link"
+import { FeatureGate } from "@/components/feature-gate"
+import { UpgradePrompt } from "@/components/upgrade-prompt"
+import { SubscriptionStatus } from "@/components/subscription-status"
+import { STRIPE_PLANS } from "@/lib/stripe"
 
 interface Channel {
   id: string
@@ -30,19 +48,51 @@ interface Channel {
   status: "active" | "inactive" | "provisioning"
   instanceId?: string
   instanceType?: string
+  storage?: string
+  os?: string
   publicIp?: string
   privateIp?: string
   hlsUrl?: string
   rtmpUrl?: string
   transcodingUrl?: string
+  healthCheckUrl?: string
   createdAt: Date
   viewerCount?: number
   isMock?: boolean
+  hlsSettings?: {
+    qualityProfiles: Array<{
+      name: string
+      resolution: string
+      bitrate: number
+      fps: number
+      enabled: boolean
+    }>
+    vttEnabled: boolean
+    segmentLength: number
+    dvrDuration: number
+    geoLocking: {
+      enabled: boolean
+      allowedCountries: string[]
+      blockedCountries: string[]
+    }
+    ipRestrictions: {
+      enabled: boolean
+      allowedIPs: string[]
+      blockedIPs: string[]
+    }
+    catchupTvEnabled: boolean
+    catchupDuration: number
+  }
   services?: {
     transcoding?: boolean
     nginx?: boolean
     ffmpeg?: boolean
+    statusServer?: boolean
     transcodingStatus?: string
+  }
+  securityGroup?: {
+    ports: number[]
+    source: string
   }
 }
 
@@ -52,8 +102,8 @@ export default function DashboardPage() {
   const [channels, setChannels] = useState<Channel[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
-  const [newChannel, setNewChannel] = useState({ name: "", description: "" })
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [deletingChannels, setDeletingChannels] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!userData) return
@@ -74,15 +124,15 @@ export default function DashboardPage() {
     return () => unsubscribe()
   }, [userData])
 
-  const createChannel = async () => {
-    if (!userData || !user || !newChannel.name.trim()) return
+  const createChannel = async (formData: any) => {
+    if (!userData || !user) return
 
     // Check channel limit based on subscription
     const maxChannels = userData.subscription?.channels || 1
     if (channels.length >= maxChannels) {
       toast({
         title: "Channel Limit Reached",
-        description: `Your ${userData.subscription?.plan} plan allows ${maxChannels} channel(s). Upgrade to create more.`,
+        description: `Your ${userData.subscription?.plan || "Basic"} plan allows ${maxChannels} channel(s). Upgrade to create more.`,
         variant: "destructive",
       })
       return
@@ -90,12 +140,38 @@ export default function DashboardPage() {
 
     setCreating(true)
     try {
+      // Validate HLS settings against user's plan
+      const userPlan = userData.subscription?.plan || "basic"
+      const planConfig = STRIPE_PLANS[userPlan as keyof typeof STRIPE_PLANS]
+
+      // Filter out features not available in current plan
+      const validatedHlsSettings = {
+        ...formData.hlsSettings,
+        geoLocking: {
+          ...formData.hlsSettings.geoLocking,
+          enabled: formData.hlsSettings.geoLocking.enabled && planConfig.hlsSettings.geoLocking.enabled,
+        },
+        ipRestrictions: {
+          ...formData.hlsSettings.ipRestrictions,
+          enabled: formData.hlsSettings.ipRestrictions.enabled && planConfig.hlsSettings.ipRestrictions.enabled,
+        },
+        catchupTvEnabled: formData.hlsSettings.catchupTvEnabled && planConfig.hlsSettings.catchupTvEnabled,
+        vttEnabled: formData.hlsSettings.vttEnabled && planConfig.hlsSettings.vttEnabled,
+        qualityProfiles: formData.hlsSettings.qualityProfiles.filter((profile: any) => {
+          if (profile.name === "4K") {
+            return planConfig.qualityProfiles.some((p) => p.name === "4K")
+          }
+          return true
+        }),
+      }
+
       // Create channel document first
       const channelData = {
-        name: newChannel.name,
-        description: newChannel.description,
+        name: formData.name,
+        description: formData.description,
         tenantId: userData.tenantId,
         status: "provisioning",
+        hlsSettings: validatedHlsSettings,
         createdAt: new Date(),
       }
 
@@ -104,14 +180,17 @@ export default function DashboardPage() {
       // Get auth token for API call
       const token = await user.getIdToken()
 
-      // Call API to provision c5.xlarge EC2 instance with transcoding
+      // Call API to provision c5.xlarge Ubuntu EC2 instance with transcoding
       const response = await fetch("/api/create-channel", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ channelId: docRef.id }),
+        body: JSON.stringify({
+          channelId: docRef.id,
+          hlsSettings: validatedHlsSettings,
+        }),
       })
 
       if (!response.ok) {
@@ -123,10 +202,9 @@ export default function DashboardPage() {
 
       toast({
         title: "Channel Created",
-        description: result.message || "Your c5.xlarge streaming instance has been provisioned successfully.",
+        description: result.message || "Your Ferdi Live streaming instance has been provisioned successfully.",
       })
 
-      setNewChannel({ name: "", description: "" })
       setDialogOpen(false)
     } catch (error: any) {
       toast({
@@ -140,17 +218,44 @@ export default function DashboardPage() {
   }
 
   const deleteChannel = async (channelId: string) => {
+    if (!user) return
+
+    setDeletingChannels((prev) => new Set(prev).add(channelId))
+
     try {
-      await deleteDoc(doc(db, "channels", channelId))
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/delete-channel", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ channelId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to delete channel")
+      }
+
+      const result = await response.json()
+
       toast({
         title: "Channel Deleted",
-        description: "Channel has been successfully deleted.",
+        description: result.message,
       })
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to delete channel.",
+        description: error.message || "Failed to delete channel.",
         variant: "destructive",
+      })
+    } finally {
+      setDeletingChannels((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(channelId)
+        return newSet
       })
     }
   }
@@ -164,7 +269,14 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return <div className="p-6">Loading channels...</div>
+    return (
+        <div className="p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading channels...</p>
+          </div>
+        </div>
+    )
   }
 
   return (
@@ -172,57 +284,69 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Channels</h1>
-            <p className="text-gray-600">Manage your live streaming channels with transcoding</p>
+            <p className="text-gray-600">Manage your Ferdi Live streaming channels</p>
           </div>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Channel
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Channel</DialogTitle>
-                <DialogDescription>
-                  Set up a new live streaming channel. A c5.xlarge EC2 instance with transcoding service will be
-                  provisioned automatically.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Channel Name</Label>
-                  <Input
-                      id="name"
-                      value={newChannel.name}
-                      onChange={(e) => setNewChannel({ ...newChannel, name: e.target.value })}
-                      placeholder="My Live Stream"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                      id="description"
-                      value={newChannel.description}
-                      onChange={(e) => setNewChannel({ ...newChannel, description: e.target.value })}
-                      placeholder="Channel description..."
-                  />
-                </div>
-                <Alert>
-                  <Cpu className="h-4 w-4" />
-                  <AlertDescription>
-                    This will create a <strong>c5.xlarge</strong> instance (4 vCPUs, 8 GB RAM) with Node.js transcoding
-                    service.
-                  </AlertDescription>
-                </Alert>
-                <Button onClick={createChannel} disabled={creating} className="w-full">
-                  {creating ? "Creating c5.xlarge Instance..." : "Create Channel"}
+          <FeatureGate
+              feature="multipleChannels"
+              requiredPlan="pro"
+              fallback={
+                channels.length >= (userData?.subscription?.channels || 1) ? (
+                    <UpgradePrompt
+                        currentPlan={userData?.subscription?.plan || "basic"}
+                        requiredPlan="pro"
+                        feature="Additional Channels"
+                    />
+                ) : (
+                    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Channel
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl">
+                        <DialogHeader>
+                          <DialogTitle>Create New Channel</DialogTitle>
+                          <DialogDescription>
+                            Configure your live streaming channel with advanced HLS settings, quality profiles, and security
+                            options.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <ChannelCreationForm onSubmit={createChannel} loading={creating} />
+                      </DialogContent>
+                    </Dialog>
+                )
+              }
+          >
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Channel
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Channel</DialogTitle>
+                  <DialogDescription>
+                    Configure your live streaming channel with advanced HLS settings, quality profiles, and security
+                    options.
+                  </DialogDescription>
+                </DialogHeader>
+                <ChannelCreationForm onSubmit={createChannel} loading={creating} />
+              </DialogContent>
+            </Dialog>
+          </FeatureGate>
         </div>
+
+        {userData?.subscription && (
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <SubscriptionStatus />
+              </div>
+            </div>
+        )}
 
         {userData?.subscription && (
             <Alert>
@@ -245,6 +369,13 @@ export default function DashboardPage() {
                           {channel.name}
                           {channel.isMock && <Badge variant="outline">Demo</Badge>}
                           {channel.instanceType && <Badge variant="secondary">{channel.instanceType}</Badge>}
+                          {channel.os && <Badge variant="outline">{channel.os}</Badge>}
+                          {channel.hlsSettings?.catchupTvEnabled && (
+                              <Badge variant="default" className="bg-purple-600">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Catch-up TV
+                              </Badge>
+                          )}
                         </CardTitle>
                         <CardDescription>{channel.description}</CardDescription>
                       </div>
@@ -252,34 +383,55 @@ export default function DashboardPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* HLS Settings Summary */}
+                    {channel.hlsSettings && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                          <div className="text-center">
+                            <Video className="h-4 w-4 mx-auto mb-1 text-blue-600" />
+                            <div className="text-xs font-medium">Quality Profiles</div>
+                            <div className="text-xs text-gray-500">
+                              {channel.hlsSettings.qualityProfiles.filter((p) => p.enabled).length} enabled
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <Settings className="h-4 w-4 mx-auto mb-1 text-green-600" />
+                            <div className="text-xs font-medium">DVR</div>
+                            <div className="text-xs text-gray-500">{channel.hlsSettings.dvrDuration}min</div>
+                          </div>
+                          <div className="text-center">
+                            <Globe className="h-4 w-4 mx-auto mb-1 text-purple-600" />
+                            <div className="text-xs font-medium">Geo-lock</div>
+                            <div className="text-xs text-gray-500">
+                              {channel.hlsSettings.geoLocking.enabled ? "Enabled" : "Disabled"}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <Shield className="h-4 w-4 mx-auto mb-1 text-orange-600" />
+                            <div className="text-xs font-medium">IP Restrict</div>
+                            <div className="text-xs text-gray-500">
+                              {channel.hlsSettings.ipRestrictions.enabled ? "Enabled" : "Disabled"}
+                            </div>
+                          </div>
+                        </div>
+                    )}
+
                     {/* Instance Information */}
                     {channel.instanceId && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <div className="flex items-center gap-2">
                             <Server className="h-4 w-4" />
-                            <Label className="text-sm font-medium">Instance Details</Label>
+                            <span className="text-sm font-medium">Instance Details</span>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                            <div className="font-mono bg-gray-100 p-2 rounded">
-                              <strong>ID:</strong> {channel.instanceId}
-                            </div>
-                            <div className="font-mono bg-gray-100 p-2 rounded">
-                              <strong>Type:</strong> {channel.instanceType || "c5.xlarge"}
-                            </div>
+
+                          <div className="text-xs font-mono bg-gray-100 p-2 rounded">
+                            <strong>Instance ID:</strong> {channel.instanceId}
                           </div>
+
                           {channel.publicIp && (
                               <div className="flex items-center gap-2">
                                 <Globe className="h-3 w-3" />
                                 <span className="text-xs">
                           <strong>Public IP:</strong> {channel.publicIp}
-                        </span>
-                              </div>
-                          )}
-                          {channel.privateIp && (
-                              <div className="flex items-center gap-2">
-                                <Monitor className="h-3 w-3" />
-                                <span className="text-xs">
-                          <strong>Private IP:</strong> {channel.privateIp}
                         </span>
                               </div>
                           )}
@@ -290,9 +442,9 @@ export default function DashboardPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       {channel.hlsUrl && (
                           <div>
-                            <Label className="text-sm font-medium">HLS URL</Label>
+                            <label className="text-sm font-medium">HLS URL</label>
                             <div className="flex items-center gap-2">
-                              <Input value={channel.hlsUrl} readOnly className="text-xs" />
+                              <input value={channel.hlsUrl} readOnly className="flex-1 text-xs p-2 border rounded" />
                               <Button size="sm" variant="outline" onClick={() => copyToClipboard(channel.hlsUrl!)}>
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -302,9 +454,9 @@ export default function DashboardPage() {
 
                       {channel.rtmpUrl && (
                           <div>
-                            <Label className="text-sm font-medium">RTMP Ingest</Label>
+                            <label className="text-sm font-medium">RTMP Ingest</label>
                             <div className="flex items-center gap-2">
-                              <Input value={channel.rtmpUrl} readOnly className="text-xs" />
+                              <input value={channel.rtmpUrl} readOnly className="flex-1 text-xs p-2 border rounded" />
                               <Button size="sm" variant="outline" onClick={() => copyToClipboard(channel.rtmpUrl!)}>
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -321,15 +473,30 @@ export default function DashboardPage() {
                     )}
 
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="flex-1">
-                        View Stream
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => deleteChannel(channel.id)}>
-                        <Trash2 className="h-3 w-3" />
+                      {channel.status === "active" && channel.hlsUrl && (
+                          <Link href={`/stream/${channel.id}`} target="_blank">
+                            <Button size="sm" variant="outline" className="flex-1">
+                              <ExternalLink className="h-3 w-3 mr-2" />
+                              View Stream
+                            </Button>
+                          </Link>
+                      )}
+                      <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteChannel(channel.id)}
+                          disabled={deletingChannels.has(channel.id)}
+                      >
+                        {deletingChannels.has(channel.id) ? "Deleting..." : <Trash2 className="h-3 w-3" />}
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Program Schedule for Catch-up TV */}
+                {channel.status === "active" && channel.hlsSettings?.catchupTvEnabled && (
+                    <ProgramSchedule channelId={channel.id} channelName={channel.name} />
+                )}
 
                 {/* Transcoding Service Status */}
                 {channel.status === "active" && (
@@ -338,6 +505,10 @@ export default function DashboardPage() {
                           channelId={channel.id}
                           publicIp={channel.publicIp}
                           transcodingUrl={channel.transcodingUrl}
+                          healthCheckUrl={channel.healthCheckUrl}
+                          instanceType={channel.instanceType}
+                          storage={channel.storage}
+                          os={channel.os}
                           services={channel.services}
                       />
 
@@ -355,7 +526,7 @@ export default function DashboardPage() {
                 <Play className="h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No channels yet</h3>
                 <p className="text-gray-600 text-center mb-4">
-                  Create your first streaming channel with c5.xlarge instance and transcoding service.
+                  Create your first Ferdi Live streaming channel with advanced HLS settings and quality profiles.
                 </p>
                 <Button onClick={() => setDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />

@@ -7,24 +7,23 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "StreamFlow - Live Streaming Management",
-  description: "Professional live streaming management platform",
-    generator: 'v0.dev'
+    title: "Ferdi Live - Live Streaming Management",
+    description: "Professional live streaming management platform by Ferdi Live",
 }
 
 export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
+                                       children,
+                                   }: {
+    children: React.ReactNode
 }) {
-  return (
-    <html lang="en">
-      <body className={inter.className}>
+    return (
+        <html lang="en">
+        <body className={inter.className}>
         <AuthProvider>
-          {children}
-          <Toaster />
+            {children}
+            <Toaster />
         </AuthProvider>
-      </body>
-    </html>
-  )
+        </body>
+        </html>
+    )
 }

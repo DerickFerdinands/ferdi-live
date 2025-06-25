@@ -1,0 +1,227 @@
+
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Ferdi Live - System Diagrams</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 40px;
+            background: #f8fafc;
+          }
+          .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          }
+          h1 {
+            color: #1e293b;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 32px;
+          }
+          .diagram-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+          }
+          .diagram-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+          }
+          .diagram-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+          }
+          .diagram-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          .diagram-info {
+            padding: 20px;
+          }
+          .diagram-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+          }
+          .diagram-description {
+            color: #64748b;
+            font-size: 14px;
+            line-height: 1.5;
+          }
+          .download-btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: background 0.2s;
+          }
+          .download-btn:hover {
+            background: #2563eb;
+          }
+          .header-info {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #64748b;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🎯 Ferdi Live - System Architecture Diagrams</h1>
+          <div class="header-info">
+            <p>Comprehensive visual documentation of the Ferdi Live streaming platform architecture, components, and data flows.</p>
+            <p><strong>Generated:</strong> 6/25/2025, 12:13:14 AM</p>
+          </div>
+          
+          <div class="diagram-grid">
+            
+              <div class="diagram-card">
+                <img src="system-architecture.png" alt="System Architecture Overview" />
+                <div class="diagram-info">
+                  <div class="diagram-title">System Architecture Overview</div>
+                  <div class="diagram-description">
+                    High-level overview of the entire system architecture including client, frontend, API, and infrastructure layers.
+                  </div>
+                  <a href="system-architecture.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="component-architecture.png" alt="Component Architecture" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Component Architecture</div>
+                  <div class="diagram-description">
+                    Detailed breakdown of React components, pages, providers, and their relationships.
+                  </div>
+                  <a href="component-architecture.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="data-flow.png" alt="Data Flow Diagram" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Data Flow Diagram</div>
+                  <div class="diagram-description">
+                    Shows how data flows through the system from user actions to storage and external services.
+                  </div>
+                  <a href="data-flow.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="use-case.png" alt="Use Case Diagram" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Use Case Diagram</div>
+                  <div class="diagram-description">
+                    Defines all the use cases for different types of users (viewers, creators, admins) and system processes.
+                  </div>
+                  <a href="use-case.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="entity-relationship.png" alt="Entity Relationship Diagram" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Entity Relationship Diagram</div>
+                  <div class="diagram-description">
+                    Database schema showing entities, attributes, and relationships between data models.
+                  </div>
+                  <a href="entity-relationship.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="sequence-channel-creation.png" alt="Channel Creation Sequence" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Channel Creation Sequence</div>
+                  <div class="diagram-description">
+                    Step-by-step sequence of creating a new streaming channel including AWS provisioning.
+                  </div>
+                  <a href="sequence-channel-creation.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="state-channel-lifecycle.png" alt="Channel State Diagram" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Channel State Diagram</div>
+                  <div class="diagram-description">
+                    State machine showing all possible states of a streaming channel and transitions.
+                  </div>
+                  <a href="state-channel-lifecycle.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="network-architecture.png" alt="Network Architecture" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Network Architecture</div>
+                  <div class="diagram-description">
+                    Network topology showing how different services and infrastructure components connect.
+                  </div>
+                  <a href="network-architecture.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="deployment-architecture.png" alt="Deployment Architecture" />
+                <div class="diagram-info">
+                  <div class="diagram-title">Deployment Architecture</div>
+                  <div class="diagram-description">
+                    Deployment view showing how the application is hosted across different platforms.
+                  </div>
+                  <a href="deployment-architecture.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+              <div class="diagram-card">
+                <img src="user-journey.png" alt="User Journey Flow" />
+                <div class="diagram-info">
+                  <div class="diagram-title">User Journey Flow</div>
+                  <div class="diagram-description">
+                    User experience flow from landing page through channel creation and streaming management.
+                  </div>
+                  <a href="user-journey.png" download class="download-btn">
+                    📥 Download PNG
+                  </a>
+                </div>
+              </div>
+            
+          </div>
+        </div>
+      </body>
+      </html>
+    

@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import {
   type User,
@@ -22,6 +21,9 @@ interface UserData {
     plan: string
     status: string
     channels: number
+    stripeCustomerId?: string
+    stripeSubscriptionId?: string
+    currentPeriodEnd?: Date
   }
 }
 
@@ -58,7 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Fetch user data from Firestore
           const userDoc = await getDoc(doc(db, "users", user.uid))
           if (userDoc.exists()) {
-            setUserData(userDoc.data() as UserData)
+            const data = userDoc.data() as UserData
+            setUserData({
+              ...data,
+              subscription: {
+                ...data.subscription,
+                currentPeriodEnd: data.subscription?.currentPeriodEnd
+                    ? new Date(data.subscription.currentPeriodEnd as any)
+                    : undefined,
+              },
+            })
           } else {
             // Create default user data if it doesn't exist
             const defaultUserData: UserData = {
@@ -72,7 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 channels: 1,
               },
             }
-            await setDoc(doc(db, "users", user.uid), defaultUserData)
+            await setDoc(doc(db, "users", user.uid), {
+              ...defaultUserData,
+              createdAt: new Date(),
+              lastActive: new Date(),
+            })
             setUserData(defaultUserData)
           }
         } else {
@@ -118,7 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       }
 
-      await setDoc(doc(db, "users", user.uid), userData)
+      await setDoc(doc(db, "users", user.uid), {
+        ...userData,
+        createdAt: new Date(),
+        lastActive: new Date(),
+      })
       setUserData(userData)
       setError(null)
     } catch (err: any) {
@@ -138,9 +157,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, userData, loading, error, signIn, signUp, logout }}>
-      {children}
-    </AuthContext.Provider>
+      <AuthContext.Provider value={{ user, userData, loading, error, signIn, signUp, logout }}>
+        {children}
+      </AuthContext.Provider>
   )
 }
 

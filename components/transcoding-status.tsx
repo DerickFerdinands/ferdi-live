@@ -7,21 +7,35 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/components/providers/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Server, CheckCircle, XCircle, RefreshCw } from "lucide-react"
+import { Server, CheckCircle, XCircle, RefreshCw, Monitor, HardDrive, Cpu } from "lucide-react"
 
 interface TranscodingStatusProps {
     channelId: string
     publicIp?: string
     transcodingUrl?: string
+    healthCheckUrl?: string
+    instanceType?: string
+    storage?: string
+    os?: string
     services?: {
         transcoding?: boolean
         nginx?: boolean
         ffmpeg?: boolean
+        statusServer?: boolean
         transcodingStatus?: string
     }
 }
 
-export function TranscodingStatus({ channelId, publicIp, transcodingUrl, services }: TranscodingStatusProps) {
+export function TranscodingStatus({
+                                      channelId,
+                                      publicIp,
+                                      transcodingUrl,
+                                      healthCheckUrl,
+                                      instanceType,
+                                      storage,
+                                      os,
+                                      services,
+                                  }: TranscodingStatusProps) {
     const { user } = useAuth()
     const { toast } = useToast()
     const [checking, setChecking] = useState(false)
@@ -92,11 +106,37 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <Server className="h-5 w-5" />
-                    Transcoding Service
+                    Ubuntu Transcoding Server
                 </CardTitle>
-                <CardDescription>Node.js transcoding service status and configuration</CardDescription>
+                <CardDescription>c5.xlarge instance with Node.js transcoding service</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+                {/* Instance Specifications */}
+                <div className="grid grid-cols-3 gap-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="text-center">
+                        <div className="flex items-center justify-center mb-1">
+                            <Cpu className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="text-xs font-medium">{instanceType || "c5.xlarge"}</div>
+                        <div className="text-xs text-gray-500">4 vCPUs, 8GB RAM</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="flex items-center justify-center mb-1">
+                            <HardDrive className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div className="text-xs font-medium">{storage || "25GB"}</div>
+                        <div className="text-xs text-gray-500">SSD Storage</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="flex items-center justify-center mb-1">
+                            <Monitor className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div className="text-xs font-medium">{os || "Ubuntu 22.04"}</div>
+                        <div className="text-xs text-gray-500">LTS</div>
+                    </div>
+                </div>
+
+                {/* Service Status */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {getStatusIcon(status)}
@@ -105,24 +145,24 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
                     {getStatusBadge(status)}
                 </div>
 
+                {/* Connection Information */}
                 {publicIp && (
                     <Alert>
-                        <AlertDescription>
-                            <strong>Instance IP:</strong> {publicIp}
+                        <AlertDescription className="text-xs">
+                            <strong>Public IP:</strong> {publicIp}
                             <br />
                             <strong>Health Check:</strong> http://{publicIp}:8080/health
-                            {transcodingUrl && (
-                                <>
-                                    <br />
-                                    <strong>Transcoding API:</strong> {transcodingUrl}
-                                </>
-                            )}
+                            <br />
+                            <strong>Transcoding API:</strong> http://{publicIp}:8000/api/status
+                            <br />
+                            <strong>Security Group:</strong> Ports 22, 80, 443, 1935, 8000 (0.0.0.0/0)
                         </AlertDescription>
                     </Alert>
                 )}
 
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
+                {/* Services Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-2 border rounded">
                         <div className="flex items-center justify-center mb-1">
                             {services?.transcoding ? (
                                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -130,9 +170,10 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
                                 <XCircle className="h-4 w-4 text-red-600" />
                             )}
                         </div>
-                        <div className="text-xs font-medium">Transcoding</div>
+                        <div className="text-xs font-medium">Node Transcoding</div>
+                        <div className="text-xs text-gray-500">Port 8000</div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center p-2 border rounded">
                         <div className="flex items-center justify-center mb-1">
                             {services?.nginx ? (
                                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -140,9 +181,10 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
                                 <XCircle className="h-4 w-4 text-red-600" />
                             )}
                         </div>
-                        <div className="text-xs font-medium">NGINX</div>
+                        <div className="text-xs font-medium">NGINX RTMP</div>
+                        <div className="text-xs text-gray-500">Port 1935</div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center p-2 border rounded">
                         <div className="flex items-center justify-center mb-1">
                             {services?.ffmpeg ? (
                                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -151,6 +193,18 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
                             )}
                         </div>
                         <div className="text-xs font-medium">FFmpeg</div>
+                        <div className="text-xs text-gray-500">Transcoding</div>
+                    </div>
+                    <div className="text-center p-2 border rounded">
+                        <div className="flex items-center justify-center mb-1">
+                            {services?.statusServer ? (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                            ) : (
+                                <XCircle className="h-4 w-4 text-red-600" />
+                            )}
+                        </div>
+                        <div className="text-xs font-medium">Status Server</div>
+                        <div className="text-xs text-gray-500">Port 8080</div>
                     </div>
                 </div>
 
@@ -159,13 +213,16 @@ export function TranscodingStatus({ channelId, publicIp, transcodingUrl, service
                     {checking ? "Checking..." : "Check Service Status"}
                 </Button>
 
+                {/* Setup Information */}
                 <Alert>
                     <AlertDescription className="text-xs">
-                        <strong>Instance Type:</strong> c5.xlarge (4 vCPUs, 8 GB RAM)
+                        <strong>Setup Commands:</strong> Automated via UserData script
                         <br />
-                        <strong>Services:</strong> Node.js Transcoding, NGINX RTMP, FFmpeg
+                        <strong>Repository:</strong> rumexinc/node-transcoding (with GitHub credentials)
                         <br />
-                        <strong>Repository:</strong> rumexinc/node-transcoding (with fallback to NGINX)
+                        <strong>Systemd Service:</strong> node-transcoding.service
+                        <br />
+                        <strong>User:</strong> ubuntu:ubuntu
                     </AlertDescription>
                 </Alert>
             </CardContent>
